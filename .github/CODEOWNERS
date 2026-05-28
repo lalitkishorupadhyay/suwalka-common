@@ -1,0 +1,4 @@
+# Every change to @suwalka/common requires review from the backend-reviewers team.
+# This file auto-requests a review on every PR — no manual assignment needed.
+
+* @sfg-labs/backend-reviewers
