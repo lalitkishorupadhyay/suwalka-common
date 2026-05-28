@@ -1,0 +1,29 @@
+# AI reviewer config for @suwalka/common
+# Applied by all three reviewers (quality, security, qa).
+
+quality:
+  enabled: true
+  exclude_paths:
+    - 'dist/**'
+    - 'node_modules/**'
+    - '**/*.test.ts'
+    - '**/*.test.js'
+  rules:
+    # Common is a tiny shared lib — single-responsibility is intentional
+    QUAL.COMPLEXITY.001:
+      threshold: 10            # cyclomatic complexity max (default 8, relax slightly for middleware)
+
+security:
+  enabled: true
+  severity_floor: LOW          # report everything; only CRITICAL/HIGH blocks merge
+  disabled_rules: []
+  exclude_paths:
+    - 'dist/**'
+    - 'node_modules/**'
+
+qa:
+  fail_on_coverage_drop: true
+  fail_on_breaking_api: false  # no OpenAPI spec in this package
+  ignore_paths:
+    - 'dist/**'
+    - 'node_modules/**'

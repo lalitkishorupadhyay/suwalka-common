@@ -1,0 +1,84 @@
+name: ai-review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+jobs:
+  # ── 1. Quality ─────────────────────────────────────────────────────────────
+  # Checks: SOLID, complexity, dead code, naming, missing tests.
+  # Always COMMENT — never blocks merge.
+  quality:
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: sfg-labs/ai-reviewer-quality@main
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          config-path: .github/ai-review.yml
+
+  # ── 2. Security ────────────────────────────────────────────────────────────
+  # Checks: OWASP, secrets, PII, DPDP, RBAC, CVEs.
+  # Blocks merge (REQUEST_CHANGES) on CRITICAL/HIGH findings.
+  # REQUIRES: add ANTHROPIC_API_KEY in repo Settings → Secrets → Actions
+  security:
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: sfg-labs/ai-reviewer-security@main
+        with:
+          anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          config-path: .github/ai-review.yml
+          fail-on-critical: 'true'
+
+  # ── 3. QA ──────────────────────────────────────────────────────────────────
+  # Checks: coverage delta, N+1 queries, perf smells.
+  # Blocks merge on coverage drop vs base branch.
+  qa:
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - run: npm install --no-audit --no-fund
+
+      # Generate base-branch coverage for delta comparison
+      - name: Base coverage
+        run: |
+          mkdir -p .ai-review
+          git fetch origin "${{ github.base_ref }}":base
+          git worktree add /tmp/base base
+          (cd /tmp/base && npm install --no-audit --no-fund && npx jest --coverage --silent || true)
+          cp /tmp/base/coverage/coverage-summary.json .ai-review/base-coverage.json 2>/dev/null || true
+
+      # Head coverage
+      - name: Head coverage
+        run: npx jest --coverage --silent || true
+
+      - uses: sfg-labs/ai-reviewer-qa@main
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          config-path: .github/ai-review.yml
+          fail-on-coverage-drop: 'true'
+          fail-on-breaking-api: 'false'
